@@ -1,0 +1,96 @@
+{% extends 'unfold/layouts/base_simple.html' %}
+{% load i18n unfold %}
+
+{% block breadcrumbs %}{% endblock %}
+
+{% block title %}
+    {% trans 'Dashboard' %} | {{ site_title|default:_('Django site admin') }}
+{% endblock %}
+
+{% block branding %}
+    <h1 id="site-name">
+        <a href="{% url 'admin:index' %}">
+            {{ site_header }}
+        </a>
+    </h1>
+{% endblock %}
+
+{% block content %}
+    {% component "unfold/components/flex.html" with class="gap-4 mb-8 flex-col lg:flex-row" %}
+        {% for stat in kpi %}
+            {% component "unfold/components/card.html" with class="lg:w-1/3" %}
+                {% component "unfold/components/flex.html" with class="items-center gap-3 mb-2" %}
+                    <span class="material-symbols-outlined text-primary-500 text-2xl">{{ stat.icon }}</span>
+                    {% component "unfold/components/text.html" with class="font-medium text-gray-500" %}
+                        {{ stat.title }}
+                    {% endcomponent %}
+                {% endcomponent %}
+                
+                {% component "unfold/components/title.html" with class="text-3xl font-bold" %}
+                    {{ stat.metric }}
+                {% endcomponent %}
+                
+                {% component "unfold/components/text.html" with class="text-xs text-gray-400 mt-2" %}
+                    {{ stat.footer }}
+                {% endcomponent %}
+            {% endcomponent %}
+        {% endfor %}
+    {% endcomponent %}
+
+    {% component "unfold/components/flex.html" with class="gap-8 flex-col lg:flex-row" %}
+        
+        {% component "unfold/components/card.html" with class="lg:w-2/3" title="Top Active Vendors" %}
+            <div style="height: 300px;">
+                <canvas id="vendorChart"></canvas>
+            </div>
+            
+            {{ vendor_chart|json_script:"vendor-chart-data" }}
+
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const ctx = document.getElementById('vendorChart');
+                    
+                    // Parse the data safely from the hidden script tag
+                    const chartData = JSON.parse(document.getElementById('vendor-chart-data').textContent);
+                    
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: chartData,
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: { beginAtZero: true }
+                            }
+                        }
+                    });
+                });
+            </script>
+        {% endcomponent %}
+
+        {% component "unfold/components/card.html" with class="lg:w-1/3" title="Quick Actions" %}
+            <div class="flex flex-col gap-2">
+                
+                <a href="{% url 'admin:rfqs_rfq_add' %}" class="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-600 bg-gray-50 rounded-md hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:bg-white/5 dark:hover:bg-white/10 dark:hover:text-gray-100 transition-colors">
+                    <span class="material-symbols-outlined text-xl">add_circle</span>
+                    Create New RFQ
+                </a>
+
+                <a href="{% url 'admin:users_user_add' %}" class="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-600 bg-gray-50 rounded-md hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:bg-white/5 dark:hover:bg-white/10 dark:hover:text-gray-100 transition-colors">
+                    <span class="material-symbols-outlined text-xl">person_add</span>
+                    Add Vendor User
+                </a>
+
+                <hr class="border-gray-200 dark:border-gray-700 my-2">
+
+                <a href="http://localhost:5173" target="_blank" class="flex items-center gap-3 px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 hover:text-blue-900 dark:text-blue-300 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 transition-colors">
+                    <span class="material-symbols-outlined text-xl">open_in_new</span>
+                    Open Live Site
+                </a>
+
+            </div>
+        {% endcomponent %}
+
+    {% endcomponent %}
+{% endblock %}
