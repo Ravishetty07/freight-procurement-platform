@@ -45,7 +45,8 @@ class ShipmentSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             bid = obj.bids.filter(vendor=request.user).first()
             if bid:
-                return BidSerializer(bid).data
+                # ADD context=self.context HERE
+                return BidSerializer(bid, context=self.context).data 
         return None
 
     def get_all_bids(self, obj):
@@ -54,11 +55,13 @@ class ShipmentSerializer(serializers.ModelSerializer):
         
         # 1. Admin / Org (Owner) sees all bids
         if user.role in ['ADMIN', 'ORG']:
-            return BidSerializer(obj.bids.all(), many=True).data
+            # ADD context=self.context HERE
+            return BidSerializer(obj.bids.all(), many=True, context=self.context).data
         
         # 2. Vendor sees bids ONLY if "Visible Bids" is ON
         if obj.rfq.visible_bids and user.role == 'VENDOR':
-            return BidSerializer(obj.bids.all(), many=True).data
+            # ADD context=self.context HERE
+            return BidSerializer(obj.bids.all(), many=True, context=self.context).data
 
         return []
 

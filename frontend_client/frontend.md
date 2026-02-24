@@ -12,6 +12,9 @@
                 ├── BidComparisonTable.jsx
                 ├── StatsCard.jsx
                 ├── VendorActivityChart.jsx
+            └── 📁chat
+                ├── BidChatDrawer.jsx
+            ├── Layout.jsx
             ├── Navbar.jsx
         └── 📁context
             ├── AuthContext.jsx
@@ -33,7 +36,6 @@
         ├── App.jsx
         ├── index.css
         ├── main.jsx
-    └── 📁utils
     ├── .env
     ├── .gitignore
     ├── eslint.config.js
