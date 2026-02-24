@@ -1,16 +1,14 @@
 from rest_framework import permissions
 
-class IsVendorOnly(permissions.BasePermission):
+class IsOrganizationOrReadOnly(permissions.BasePermission):
     """
-    Allows access only to users with the role 'VENDOR'.
+    Custom permission to only allow Organizations (or Admins) to create/edit RFQs.
+    Vendors can only view (GET) or place bids.
     """
     def has_permission(self, request, view):
-        # Must be logged in AND have role='VENDOR'
-        return request.user.is_authenticated and request.user.role == 'VENDOR'
+        # Read permissions are allowed to any authenticated user
+        if request.method in permissions.SAFE_METHODS:
+            return request.user.is_authenticated
 
-class IsShipperOrAdmin(permissions.BasePermission):
-    """
-    Allows access only to Organization (Shipper) or Admin.
-    """
-    def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role in ['ADMIN', 'ORG']
+        # Write permissions (POST, PUT, DELETE) are only for ORG or ADMIN
+        return request.user.role in ['ORG', 'ADMIN'] or request.user.is_staff

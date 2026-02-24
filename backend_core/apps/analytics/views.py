@@ -1,52 +1,80 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Count, Sum, F, Avg, Min
-from apps.rfqs.models import RFQ, Shipment, Bid
+from apps.rfqs.models import RFQ, Bid
+from django.contrib.auth import get_user_model
+from django.utils import timezone
+from datetime import timedelta
+from django.db.models import Count
+from django.db.models.functions import TruncDate
+
+User = get_user_model()
 
 class DashboardStatsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
-        
-        # 1. Basic Counts
-        total_rfqs = RFQ.objects.filter(created_by=user).count()
-        total_shipments = Shipment.objects.filter(rfq__created_by=user).count()
-        
-        # 2. Savings Calculation (AI Target vs Best Bid)
-        # Find shipments that have both a target price and at least one bid
-        completed_shipments = Shipment.objects.filter(
-            rfq__created_by=user, 
-            target_price__isnull=False, 
-            bids__isnull=False
-        ).distinct()
-        
-        total_savings = 0
-        total_spend = 0
-        
-        for shipment in completed_shipments:
-            # Get the lowest bid for this shipment
-            best_bid = shipment.bids.order_by('amount').first()
-            if best_bid:
-                # Savings = (AI Predicted Price) - (Actual Bid Price)
-                # If AI said $5000 and Vendor bid $4500, we saved $500.
-                potential_saving = float(shipment.target_price) - float(best_bid.amount)
-                if potential_saving > 0:
-                    total_savings += potential_saving
-                total_spend += float(best_bid.amount)
+        now = timezone.now()
+        seven_days_ago = now - timedelta(days=6) # Last 7 days including today
 
-        # 3. Bids by Vendor (Who is active?)
-        top_vendors = Bid.objects.filter(shipment__rfq__created_by=user).values(
-            'vendor__username', 'vendor__company_name'
-        ).annotate(bid_count=Count('id')).order_by('-bid_count')[:5]
+        if user.role == 'VENDOR':
+            active_bids = Bid.objects.filter(vendor=user, is_winner=False).count()
+            won_bids = Bid.objects.filter(vendor=user, is_winner=True).count()
+            
+            # REAL DATA: Bids submitted per day (Last 7 Days)
+            bids_by_day = Bid.objects.filter(vendor=user, created_at__date__gte=seven_days_ago) \
+                .annotate(date=TruncDate('created_at')) \
+                .values('date') \
+                .annotate(count=Count('id'))
+            
+            chart_data = []
+            for i in range(7):
+                day = (seven_days_ago + timedelta(days=i)).date()
+                daily_count = next((item['count'] for item in bids_by_day if item['date'] == day), 0)
+                chart_data.append({"name": day.strftime("%a"), "bids": daily_count})
 
-        return Response({
-            "kpi": {
+            return Response({
+                "active_bids": active_bids,
+                "won_bids": won_bids,
+                "pie_data": [
+                    {"name": "Won Awards", "value": won_bids if won_bids > 0 else 1}, # Fallback to 1 to render empty ring
+                    {"name": "Pending Bids", "value": active_bids if active_bids > 0 else 1}
+                ],
+                "chart_data": chart_data
+            })
+
+        else:
+            # FOR SHIPPERS (ORG/ADMIN)
+            total_rfqs = RFQ.objects.filter(created_by=user).count()
+            total_bids = Bid.objects.filter(shipment__rfq__created_by=user).count()
+            total_vendors = User.objects.filter(role='VENDOR').count()
+            
+            # REAL DATA: RFQ Status Breakdown for Pie Chart
+            open_rfqs = RFQ.objects.filter(created_by=user, status='OPEN').count()
+            closed_rfqs = RFQ.objects.filter(created_by=user, status='CLOSED').count()
+            draft_rfqs = RFQ.objects.filter(created_by=user, status='DRAFT').count()
+            
+            # REAL DATA: RFQs created per day (Last 7 Days)
+            rfqs_by_day = RFQ.objects.filter(created_by=user, created_at__date__gte=seven_days_ago) \
+                .annotate(date=TruncDate('created_at')) \
+                .values('date') \
+                .annotate(count=Count('id'))
+                
+            chart_data = []
+            for i in range(7):
+                day = (seven_days_ago + timedelta(days=i)).date()
+                daily_count = next((item['count'] for item in rfqs_by_day if item['date'] == day), 0)
+                chart_data.append({"name": day.strftime("%a"), "rfqs": daily_count})
+
+            return Response({
                 "total_rfqs": total_rfqs,
-                "active_shipments": total_shipments,
-                "total_savings": round(total_savings, 2),
-                "total_spend": round(total_spend, 2)
-            },
-            "vendors": top_vendors
-        })
+                "total_bids": total_bids,
+                "total_users": total_vendors,
+                "pie_data": [
+                    {"name": "Open/Live", "value": open_rfqs if open_rfqs > 0 else 1},
+                    {"name": "Closed/Awarded", "value": closed_rfqs if closed_rfqs > 0 else 1},
+                    {"name": "Drafts", "value": draft_rfqs if draft_rfqs > 0 else 1},
+                ],
+                "chart_data": chart_data
+            })

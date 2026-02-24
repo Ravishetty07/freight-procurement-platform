@@ -24,8 +24,8 @@ def bid_notification(sender, instance, created, **kwargs):
                 "message": {
                     "shipment_id": instance.shipment.id,
                     "amount": float(instance.amount),
-                    "vendor": instance.vendor.username,
-                    "rank": instance.rank
+                    "vendor": instance.vendor.username
+                    # FIXED: Removed the "rank" line from here!
                 }
             }
         )

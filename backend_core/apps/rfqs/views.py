@@ -1,123 +1,53 @@
 import pandas as pd
-import google.generativeai as genai
-import os
-import traceback
-from rest_framework import viewsets, permissions, status, serializers
+from rest_framework import viewsets, permissions, status
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import RFQ, Shipment, Bid
 from .serializers import RFQSerializer, ShipmentSerializer, BidSerializer
-
-# --- 1. AI CONFIGURATION ---
-GENAI_API_KEY = os.environ.get("GEMINI_API_KEY")
-
-if GENAI_API_KEY:
-    genai.configure(api_key=GENAI_API_KEY)
-    model = genai.GenerativeModel('gemini-pro')
-else:
-    print("⚠️ WARNING: GEMINI_API_KEY not found. AI Pricing will default to 0.")
-    model = None
-
-# --- 2. HELPER FUNCTION ---
-def get_ai_price_estimate(origin, destination, container_type):
-    if not model:
-        return 0.0
-    try:
-        prompt = f"Estimate freight rate USD for {container_type} from {origin} to {destination}. Return ONLY number."
-        response = model.generate_content(prompt)
-        cleaned_text = ''.join(c for c in response.text if c.isdigit() or c == '.')
-        return float(cleaned_text) if cleaned_text else 0.0
-    except Exception as e:
-        print(f"❌ AI Error: {e}")
-        return 0.0
-
-# --- 3. VIEWSETS ---
+from .permissions import IsOrganizationOrReadOnly
+from .pdf_service import generate_contract_pdf
 
 class RFQViewSet(viewsets.ModelViewSet):
     serializer_class = RFQSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    # 🔒 SECURE: Only Org can create, Vendors can only read
+    permission_classes = [IsOrganizationOrReadOnly] 
+    parser_classes = [MultiPartParser, FormParser] # Allows file uploads
 
     def get_queryset(self):
         user = self.request.user
         
-        # Admin sees all
-        if user.role == 'ADMIN':
-            return RFQ.objects.all().order_by('-created_at')
-            
-        # Vendor sees PUBLIC or OPEN RFQs
-        if user.role == 'VENDOR':
-            return RFQ.objects.filter(status='OPEN').order_by('-created_at')
+        # 🚀 THE FIX: Fetch everything in one single, fast database query
+        optimized_queryset = RFQ.objects.select_related('created_by').prefetch_related(
+            'shipments',
+            'shipments__bids',
+            'shipments__bids__vendor'
+        ).order_by('-created_at')
 
-        # Organization sees ONLY their own RFQs
-        return RFQ.objects.filter(created_by=user).order_by('-created_at')
+        if user.role == 'VENDOR':
+            # Vendors see OPEN RFQs
+            return optimized_queryset.filter(status='OPEN')
+        if user.role == 'ADMIN':
+            return optimized_queryset.all()
+            
+        # Org sees ONLY their own
+        return optimized_queryset.filter(created_by=user)
 
     def perform_create(self, serializer):
-        # Your models.py uses 'created_by', so we set that here
+        # Automatically assign the creator
         serializer.save(created_by=self.request.user)
-
-    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
-    def upload_shipments(self, request, pk=None):
-        rfq = self.get_object()
-        file_obj = request.FILES.get('file')
-        if not file_obj:
-            return Response({"error": "No file provided"}, status=400)
-
-        try:
-            if file_obj.name.endswith('.csv'):
-                df = pd.read_csv(file_obj)
-            else:
-                df = pd.read_excel(file_obj)
-
-            created_count = 0
-            for _, row in df.iterrows():
-                origin = row.get('origin_port')
-                destination = row.get('destination_port')
-                container = row.get('container_type', '40HC')
-                volume = row.get('volume', 1)
-                ai_price = get_ai_price_estimate(origin, destination, container)
-
-                Shipment.objects.create(
-                    rfq=rfq,
-                    origin_port=origin,
-                    destination_port=destination,
-                    container_type=container,
-                    volume=volume,
-                    ai_predicted_price=ai_price,
-                    target_price=row.get('target_price') if pd.notna(row.get('target_price')) else None
-                )
-                created_count += 1
-            return Response({"status": f"✅ Created {created_count} shipments from file."})
-        except Exception as e:
-            return Response({"error": str(e)}, status=400)
-
-
+        
+        
 class ShipmentViewSet(viewsets.ModelViewSet):
     queryset = Shipment.objects.all()
     serializer_class = ShipmentSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    # 🔒 SECURE: Only Org can add shipments
+    permission_classes = [IsOrganizationOrReadOnly]
 
     def perform_create(self, serializer):
-        try:
-            # 1. Extract Data safely
-            data = serializer.validated_data
-            origin = data.get('origin_port', '')
-            destination = data.get('destination_port', '')
-            container = data.get('container_type', '40HC')
-            
-            # 2. Call AI
-            ai_price = get_ai_price_estimate(origin, destination, container)
-            print(f"🤖 AI Price Calculated: {ai_price}")
+        # Simply save the shipment. NO AI LOGIC HERE anymore.
+        serializer.save()
 
-            # 3. Save
-            # Note: The 'rfq' field is automatically handled by the serializer
-            # because it is part of the request payload from the frontend.
-            serializer.save(ai_predicted_price=ai_price)
-            
-        except Exception as e:
-            print("❌ CRITICAL ERROR in Shipment Create:")
-            traceback.print_exc()
-            raise serializers.ValidationError({"detail": f"Backend Error: {str(e)}"})
 
 class BidViewSet(viewsets.ModelViewSet):
     serializer_class = BidSerializer
@@ -130,4 +60,76 @@ class BidViewSet(viewsets.ModelViewSet):
         return Bid.objects.all()
 
     def perform_create(self, serializer):
+        if self.request.user.role == 'ORG':
+             raise permissions.exceptions.PermissionDenied("Organizations cannot place bids.")
         serializer.save(vendor=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def award(self, request, pk=None):
+        bid = self.get_object()
+        
+        # Security: Make sure only the Org who created the RFQ can award it
+        if bid.shipment.rfq.created_by != request.user:
+            return Response({"error": "Not authorized to award this bid."}, status=403)
+        
+        # 1. Un-award any other bids for this specific shipment
+        bid.shipment.bids.update(is_winner=False)
+        
+        # 2. Mark this specific bid as the winner
+        bid.is_winner = True
+        
+        # 3. 🚀 AUTO-GENERATE THE PDF CONTRACT
+        if not bid.contract_file:
+            pdf_file = generate_contract_pdf(bid)
+            if pdf_file:
+                bid.contract_file = pdf_file
+
+        bid.save()
+        
+        return Response({"message": "Bid successfully awarded and Contract generated!"})
+
+    # ----------------------------------------------------
+    # COUNTER-OFFER LOGIC
+    # ----------------------------------------------------
+    @action(detail=True, methods=['post'])
+    def make_counter(self, request, pk=None):
+        bid = self.get_object()
+        # Security: Only the Shipper who owns the RFQ can make a counter-offer
+        if bid.shipment.rfq.created_by != request.user:
+            return Response({"error": "Not authorized."}, status=403)
+        
+        counter_amount = request.data.get('counter_amount')
+        if not counter_amount:
+            return Response({"error": "counter_amount is required."}, status=400)
+
+        bid.counter_offer_amount = counter_amount
+        bid.counter_offer_status = 'PENDING'
+        bid.save()
+        return Response({"message": "Counter offer sent successfully.", "counter_amount": bid.counter_offer_amount})
+
+    @action(detail=True, methods=['post'])
+    def accept_counter(self, request, pk=None):
+        bid = self.get_object()
+        if bid.vendor != request.user:
+            return Response({"error": "Not authorized."}, status=403)
+        
+        if bid.counter_offer_status != 'PENDING':
+            return Response({"error": "No pending counter offer to accept."}, status=400)
+
+        bid.amount = bid.counter_offer_amount
+        bid.counter_offer_status = 'ACCEPTED'
+        bid.save()
+        return Response({"message": "Counter offer accepted. Bid amount updated."})
+
+    @action(detail=True, methods=['post'])
+    def reject_counter(self, request, pk=None):
+        bid = self.get_object()
+        if bid.vendor != request.user:
+            return Response({"error": "Not authorized."}, status=403)
+
+        if bid.counter_offer_status != 'PENDING':
+            return Response({"error": "No pending counter offer to reject."}, status=400)
+
+        bid.counter_offer_status = 'REJECTED'
+        bid.save()
+        return Response({"message": "Counter offer rejected."})
