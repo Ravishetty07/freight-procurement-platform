@@ -12,11 +12,9 @@
                 ├── BidComparisonTable.jsx
                 ├── StatsCard.jsx
                 ├── VendorActivityChart.jsx
-            └── 📁common
-            └── 📁layout
+            ├── Navbar.jsx
         └── 📁context
             ├── AuthContext.jsx
-        └── 📁hooks
         └── 📁pages
             └── 📁auth
                 ├── Login.jsx
@@ -28,9 +26,9 @@
                 ├── RFQList.jsx
             └── 📁vendor
                 ├── BidModal.jsx
+                ├── MyBids.jsx
         └── 📁services
             ├── api.js
-        └── 📁utils
         ├── App.css
         ├── App.jsx
         ├── index.css

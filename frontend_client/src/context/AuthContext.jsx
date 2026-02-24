@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext } from 'react';
 import api from '../api/axios';
 
 const AuthContext = createContext();
@@ -7,43 +7,44 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // 1. On page load, check if we have a token
     useEffect(() => {
-        const token = localStorage.getItem('access_token');
-        if (token) {
-            // We assume the user is logged in if a token exists
-            // Later we can verify this with the backend
-            setUser({ name: "Admin User" }); 
+        // 1. Check for existing session on load
+        const token = localStorage.getItem('token');
+        const role = localStorage.getItem('role');
+        const username = localStorage.getItem('username');
+        
+        if (token && role) {
+            setUser({ role, username, token });
         }
         setLoading(false);
     }, []);
 
-    // 2. Login Function
     const login = async (username, password) => {
         try {
-            // Hits Django at: http://127.0.0.1:8000/api/v1/token/
-            const response = await api.post('/token/', { username, password });
+            const response = await api.post('/users/login/', { username, password });
+            const { access, role, company_name } = response.data;
             
-            // Save tokens to browser storage
-            localStorage.setItem('access_token', response.data.access);
-            localStorage.setItem('refresh_token', response.data.refresh);
+            localStorage.setItem('token', access);
+            localStorage.setItem('role', role);
+            localStorage.setItem('username', username);
             
-            setUser({ username });
-            return { success: true };
+            setUser({ role, username, company_name, token: access });
+            return true;
         } catch (error) {
-            console.error("Login Error:", error);
-            return { 
-                success: false, 
-                msg: error.response?.data?.detail || "Server connection failed" 
-            };
+            console.error("Login failed", error);
+            throw error;
         }
     };
 
-    // 3. Logout Function
     const logout = () => {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+        // 1. Wipe everything
+        localStorage.removeItem('token');
+        localStorage.removeItem('role');
+        localStorage.removeItem('username');
         setUser(null);
+        
+        // 2. Hard Redirect (Clears Browser Memory of previous pages)
+        window.location.href = '/login'; 
     };
 
     return (
@@ -53,5 +54,4 @@ export const AuthProvider = ({ children }) => {
     );
 };
 
-// Hook to use auth easily in other files
 export const useAuth = () => useContext(AuthContext);
