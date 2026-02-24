@@ -36,7 +36,7 @@ SECRET_KEY = 'django-insecure-(#pq-f$(b_o@j1kn%9im$etcckq=^h3vduvzmoyxh^vv##(w2h
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*', '.vercel.app']
+ALLOWED_HOSTS = ['*', '.onrender.com']
 
 
 # Application definition
@@ -157,16 +157,16 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Media files (PDF Contracts & Uploads)
-if os.environ.get('VERCEL') == '1':
+if os.environ.get('RENDER'):
     # Production: Supabase S3 Storage
     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
     
     AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
     AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
-    AWS_STORAGE_BUCKET_NAME = 'freight-media' # Ensure this matches your Supabase bucket name exactly
+    AWS_STORAGE_BUCKET_NAME = 'freight-media' # Ensure this matches your Supabase bucket
     AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL')
     
-    AWS_S3_REGION_NAME = 'ap-southeast-1' # Matches your DB region
+    AWS_S3_REGION_NAME = 'ap-southeast-1' 
     AWS_S3_SIGNATURE_VERSION = 's3v4'
     AWS_S3_FILE_OVERWRITE = False
     AWS_DEFAULT_ACL = 'public-read'
@@ -174,8 +174,7 @@ if os.environ.get('VERCEL') == '1':
 else:
     # Local Development: Save to your computer
     MEDIA_URL = '/media/'
-    MEDIA_ROOT = BASE_DIR / 'media'
-    
+    MEDIA_ROOT = BASE_DIR / 'media'  
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
@@ -277,9 +276,19 @@ UNFOLD = {
         ],
     },
 }
-# Channels Configuration
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer"
+if os.environ.get('REDIS_URL'):
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [os.environ.get('REDIS_URL')],
+            },
+        }
     }
-}
+else:
+    # Fallback for local development without Redis
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer"
+        }
+    }

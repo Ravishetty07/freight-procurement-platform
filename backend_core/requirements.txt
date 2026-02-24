@@ -8,6 +8,7 @@ boto3==1.42.55
 botocore==1.42.55
 cbor2==5.8.0
 certifi==2026.1.4
+channels-redis==4.2.0
 cffi==2.0.0
 channels==4.3.2
 charset-normalizer==3.4.4
