@@ -203,7 +203,11 @@ ASGI_APPLICATION = "config.asgi.application"
 # CORS Settings (Allow Frontend to talk to Backend)
 CORS_ALLOW_ALL_ORIGINS = True  # For development only
 CORS_ALLOW_CREDENTIALS = True
-
+# Whitelist your live domains for CSRF protection
+CSRF_TRUSTED_ORIGINS = [
+    'https://freight-procurement-platform.onrender.com',
+    'https://frontendclient-ruby.vercel.app', 
+]
 # REST Framework Config
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
