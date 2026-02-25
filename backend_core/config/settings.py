@@ -204,9 +204,19 @@ ASGI_APPLICATION = "config.asgi.application"
 CORS_ALLOW_ALL_ORIGINS = True  # For development only
 CORS_ALLOW_CREDENTIALS = True
 # Whitelist your live domains for CSRF protection
+# Whitelist your live domains for CSRF protection
 CSRF_TRUSTED_ORIGINS = [
     'https://freight-procurement-platform.onrender.com',
     'https://frontendclient-ruby.vercel.app', 
+]
+
+# 🚀 THE FIX: Tell Django it is safely running behind Render's HTTPS proxy
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Also, ensure CORS explicitly allows your Vercel frontend
+CORS_ALLOWED_ORIGINS = [
+    'https://frontendclient-ruby.vercel.app',
+    'https://freight-procurement-platform.onrender.com',
 ]
 # REST Framework Config
 REST_FRAMEWORK = {
