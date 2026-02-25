@@ -160,32 +160,23 @@ if os.environ.get('RENDER'):
     STORAGES = {
         "default": {
             "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+            "OPTIONS": {
+                "bucket_name": "freight-media",
+                "region_name": "ap-southeast-1",
+                "endpoint_url": os.environ.get("AWS_S3_ENDPOINT_URL"),
+                "access_key": os.environ.get("AWS_ACCESS_KEY_ID"),
+                "secret_key": os.environ.get("AWS_SECRET_ACCESS_KEY"),
+                "addressing_style": "path",
+                "signature_version": "s3v4",
+                # "querystring_auth": False, # <-- Read the note below!
+            }
         },
         "staticfiles": {
             "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
         },
     }
     
-    AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
-    AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
-    AWS_STORAGE_BUCKET_NAME = 'freight-media'
-    AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL')
-    
-    AWS_S3_REGION_NAME = 'ap-southeast-1' 
-    AWS_S3_SIGNATURE_VERSION = 's3v4'
-    AWS_S3_FILE_OVERWRITE = False
-    AWS_DEFAULT_ACL = 'public-read'
-    AWS_S3_ADDRESSING_STYLE = 'path'
-else:
-    # LOCAL DEVELOPMENT: Save everything to your computer
-    STORAGES = {
-        "default": {
-            "BACKEND": "django.core.files.storage.FileSystemStorage",
-        },
-        "staticfiles": {
-            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-        },
-    }
+    # YOU CAN NOW DELETE ALL THE LOOSE AWS_ VARIABLES BELOW THIS!
     MEDIA_URL = '/media/'
     MEDIA_ROOT = BASE_DIR / 'media'
 # Default primary key field type
