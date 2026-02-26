@@ -19,7 +19,14 @@ const Login = () => {
       await login(username, password);
       navigate("/dashboard");
     } catch (err) {
-      setError("Invalid Credentials. Please try again.");
+      // FIX: Check if this is a server wake-up issue or an actual wrong password
+      if (err.isServerWakeup) {
+        setError("The server is waking up from sleep. This can take up to 2 minutes on the free tier. Please wait a moment and click login again.");
+      } else if (err.response && err.response.status === 401) {
+        setError("Invalid Credentials. Please try again.");
+      } else {
+        setError("Something went wrong. Please check your connection and try again.");
+      }
     } finally {
       setIsLoading(false);
     }

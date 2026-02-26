@@ -35,9 +35,8 @@ class ShipmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Shipment
         fields = [
-            'id', 'rfq', 'origin_port', 'destination_port', 
-            'container_type', 'volume', 'target_price', 
-            'my_bid', 'all_bids'
+            'id', 'rfq', 'title', 'origin_port', 'destination_port', 
+            'container_type', 'volume', 'target_price', 'my_bid', 'all_bids'
         ]
 
     def get_my_bid(self, obj):

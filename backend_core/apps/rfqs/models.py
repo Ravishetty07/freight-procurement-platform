@@ -30,18 +30,17 @@ class Shipment(models.Model):
     """A specific lane within an RFQ."""
     rfq = models.ForeignKey(RFQ, related_name="shipments", on_delete=models.CASCADE)
     
+    # 🚀 ADD THIS LINE:
+    title = models.CharField(max_length=100, blank=True, null=True, help_text="e.g. German Supply Chain")
+    
     origin_port = models.CharField(max_length=100)
     destination_port = models.CharField(max_length=100)
-    
-    # SIMPLIFIED: Defaulting to 40HC, but keeping the field for logic
-    container_type = models.CharField(max_length=50, default="40HC") 
+    container_type = models.CharField(max_length=20, default="40HC")
     volume = models.IntegerField(default=1)
-    
-    # Removed AI Price from here (will be calculated only in Dashboard for analysis)
     target_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     def __str__(self):
-        return f"{self.origin_port} -> {self.destination_port}"
+        return f"{self.title or 'Lane'} : {self.origin_port} to {self.destination_port}"
     
 class Bid(models.Model):
     # --- NEW: Counter Offer Status Choices ---

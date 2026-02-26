@@ -11797,6 +11797,31 @@
                     ├── py.typed
                     ├── variables.py
                     ├── version.py
+                └── 📁fpdf
+                    └── 📁__pycache__
+                        ├── __init__.cpython-312.pyc
+                        ├── fonts.cpython-312.pyc
+                        ├── fpdf.cpython-312.pyc
+                        ├── html.cpython-312.pyc
+                        ├── php.cpython-312.pyc
+                        ├── py3k.cpython-312.pyc
+                        ├── template.cpython-312.pyc
+                        ├── ttfonts.cpython-312.pyc
+                    ├── __init__.py
+                    ├── fonts.py
+                    ├── fpdf.py
+                    ├── html.py
+                    ├── php.py
+                    ├── py3k.py
+                    ├── template.py
+                    ├── ttfonts.py
+                └── 📁fpdf-1.7.2.dist-info
+                    ├── INSTALLER
+                    ├── METADATA
+                    ├── RECORD
+                    ├── REQUESTED
+                    ├── top_level.txt
+                    ├── WHEEL
                 └── 📁freetype
                     └── 📁__pycache__
                         ├── __init__.cpython-312.pyc

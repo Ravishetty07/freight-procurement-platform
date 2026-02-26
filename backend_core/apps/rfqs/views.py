@@ -1,3 +1,4 @@
+import threading
 import pandas as pd
 from rest_framework import viewsets, permissions, status
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -72,21 +73,55 @@ class BidViewSet(viewsets.ModelViewSet):
         if bid.shipment.rfq.created_by != request.user:
             return Response({"error": "Not authorized to award this bid."}, status=403)
         
-        # 1. Un-award any other bids for this specific shipment
-        bid.shipment.bids.update(is_winner=False)
+        try:
+            # 1. Safely un-award any other bids for this specific shipment
+            from .models import Bid
+            Bid.objects.filter(shipment=bid.shipment).update(is_winner=False)
+            
+            # 2. Mark this specific bid as the winner
+            bid.is_winner = True
+            bid.save()
+        except Exception as e:
+            print(f"Database Error during Award: {e}")
+            return Response({"error": "Failed to update database."}, status=500)
         
-        # 2. Mark this specific bid as the winner
-        bid.is_winner = True
-        
-        # 3. 🚀 AUTO-GENERATE THE PDF CONTRACT
-        if not bid.contract_file:
-            pdf_file = generate_contract_pdf(bid)
-            if pdf_file:
-                bid.contract_file = pdf_file
+        # 3. 🚀 BACKGROUND PDF GENERATION
+        # 3. 🚀 BACKGROUND PDF GENERATION
+        def background_pdf_task(bid_id):
+            try:
+                from .models import Bid 
+                from .pdf_service import generate_contract_pdf
+                
+                thread_bid = Bid.objects.get(id=bid_id)
+                print(f"--- STARTING PDF GENERATION FOR BID {bid_id} ---")
+                
+                # 🚀 THE FIX: Delete any old "ghost" file strings from the database first
+                # This ensures we don't accidentally fetch a broken URL from earlier testing
+                if thread_bid.contract_file:
+                    thread_bid.contract_file.delete(save=False)
+                
+                # Generate the new PDF content into memory
+                pdf_content_file = generate_contract_pdf(thread_bid)
+                
+                if pdf_content_file:
+                    # Save the physical file using Django's storage system
+                    thread_bid.contract_file.save(
+                        pdf_content_file.name, 
+                        pdf_content_file, 
+                        save=True
+                    )
+                    print(f"✅ SUCCESS: PDF saved to {thread_bid.contract_file.name}")
+                else:
+                    print("❌ ERROR: pdf_service returned None. Check your HTML template!")
+                    
+            except Exception as e:
+                print(f"❌ THREAD CRASHED: {e}")
 
-        bid.save()
+        # Start the thread unconditionally to overwrite old broken data
+        pdf_thread = threading.Thread(target=background_pdf_task, args=(bid.id,))
+        pdf_thread.start()
         
-        return Response({"message": "Bid successfully awarded and Contract generated!"})
+        return Response({"message": "Bid successfully awarded! Contract is generating in the background."})
 
     # ----------------------------------------------------
     # COUNTER-OFFER LOGIC
